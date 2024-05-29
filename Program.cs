@@ -1,30 +1,93 @@
-namespace EjemploWebhookBioengine;
 
-public class Program{
-    public static void Main(string[] args) {
-        var builder = WebApplication.CreateBuilder(args);
+using Serilog;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Mvc;
 
-        // Add services to the container.
+using Microsoft.OpenApi.Models;
+using Swashbuckle.AspNetCore.SwaggerUI;
 
-        builder.Services.AddControllers();
-        // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-        builder.Services.AddEndpointsApiExplorer();
-        builder.Services.AddSwaggerGen();
+using Microsoft.AspNetCore.Mvc.Authorization;
 
-        var app = builder.Build();
-
-        // Configure the HTTP request pipeline.
-        if (app.Environment.IsDevelopment())
+namespace EjemploWebhookBioengine
+{
+    public class Program
+    {
+         public static void Main(string[] args)
         {
-            app.UseSwagger();
-            app.UseSwaggerUI();
+            
+            var enviroment = $"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development"}.json";
+            Console.WriteLine("Env=" + Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"));
+            
+           
+            var builder = WebApplication.CreateBuilder(args);
+            builder.Configuration
+                .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: false, reloadOnChange: false);
+              
+
+            builder.Configuration.AddEnvironmentVariables();
+            builder.Services.Configure<JsonOptions>(options =>
+            {
+                options.JsonSerializerOptions.DefaultIgnoreCondition=JsonIgnoreCondition.WhenWritingNull;
+            });
+
+
+            // Add services to the container.
+           
+            builder.Services.AddEndpointsApiExplorer(); ;
+
+            builder.Services.AddControllers();
+            builder.Services.AddSwaggerGen(c =>
+            {
+                
+                c.SwaggerDoc("v1", new OpenApiInfo
+                {
+                    Title = $"BioEngine API",
+                    Version = "1.0",
+                    Description = "API principal para conectarse a los motores biométricos",
+                    Contact = new OpenApiContact { Email = "info@cosmocolor.com.mx", Name = "" }
+                });
+
+                var basePath = AppContext.BaseDirectory;
+                var xmlPath = Path.Combine(basePath, "EjemploWebhookBioengine.xml");
+                c.IncludeXmlComments(xmlPath);
+                c.ResolveConflictingActions(x => x.First());
+            });
+           
+
+            
+            
+            builder.Host.UseSerilog((ctx, lc) => lc.ReadFrom.Configuration(ctx.Configuration));
+            
+         
+            var app = builder.Build();
+            app.UseAuthentication();
+            app.MapControllers();
+            app.UseSwagger(c =>
+            {
+                c.RouteTemplate = $"api-docs/{{documentName}}/swagger.json";
+                
+            });
+            
+           
+
+
+            app.UseSerilogRequestLogging();
+            app.UseRouting();
+            app.UseAuthorization();
+
+            
+            app.UseSwaggerUI(c=>
+            {
+
+               c.SwaggerEndpoint("../api-docs/v1/swagger.json", "Bioengine V3");
+                
+                c.DocExpansion(DocExpansion.None);
+
+
+            });
+            
+            app.Run();
+
         }
-
-        app.UseAuthorization();
-
-
-        app.MapControllers();
-
-        app.Run();
     }
 }
